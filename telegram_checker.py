@@ -1,13 +1,17 @@
 import asyncio
 import random
 import string
-import time
+import requests
 
 from colorama import Fore, init
 from telethon import TelegramClient, functions, types
 
 init(autoreset=True)
-
+def word():
+    result = requests.get('https://shdw.pythonanywhere.com/').text.strip()
+    if not result:
+        return "default"
+    return result
 class TelegramChecker:
     def __init__(self):
         self.checked = 0
@@ -25,9 +29,9 @@ class TelegramChecker:
         self.api_id = input("Enter your API ID: ").strip()
         self.api_hash = input("Enter your API Hash: ").strip()
         self.phone = input("Enter your phone number (with country code, e.g. +12345678901): ").strip()
-        
-        self.mode = input(f"Choose mode:\n1. Check from file\n2. Check random usernames\n3. Check specific username\nEnter choice (1-3): ").strip()
-        
+
+        self.mode = input(f"Choose mode:\n1. Check from file\n2. Check random usernames\n3. Check specific username\n4. Meanings\nEnter choice (1-4): ").strip()
+
         if self.mode == "1":
             self.file_path = input("Enter file path containing usernames: ").strip()
             self.usernames = self.load_usernames()
@@ -36,6 +40,8 @@ class TelegramChecker:
             self.count = int(input("Enter number of usernames to check (or press Enter for unlimited until 1005 available): ").strip() or 0)
         elif self.mode == "3":
             self.username = input("Enter username to check: ").strip()
+        elif self.mode == "4":
+            self.count = int(input("Enter number of usernames to check (or press Enter for unlimited until 1005 available): ").strip() or 0)
         else:
             print(f"{Fore.RED}Invalid choice. Exiting.")
             exit()
@@ -61,7 +67,6 @@ class TelegramChecker:
                 print(f"{Fore.RED}[TAKEN] {username}")
             except Exception as resolve_error:
                 error_message = str(resolve_error).lower()
-                print
                 if "the username is not in use by anyone else yet" in error_message:
                     self.available += 1
                     print(f"{Fore.GREEN}[AVAILABLE] https://t.me/{username}")
@@ -111,11 +116,22 @@ class TelegramChecker:
         finally:
             await client.disconnect()
     
+    async def process_random_meanings(self, client, count=None):
+        checked = 0
+        while (count is None or checked < count) and self.run and self.available < self.target_available:
+            username = word()
+            if len(username) < 5 or len(username) > 32:
+                continue
+            await self.check_username_api(client, username)
+            checked += 1
+            self.print_status()
+            await asyncio.sleep(2)
     def start(self):
         print(f"{Fore.CYAN}Starting username checker...")
         
         try:
-            loop = asyncio.get_event_loop()
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
             
             if self.mode == "1":
                 loop.run_until_complete(self.run_client(self.process_usernames, self.usernames))
@@ -134,6 +150,12 @@ class TelegramChecker:
                     
                 loop.run_until_complete(self.run_client(single_check_worker))
                 print("\nUsername check completed.")
+            elif self.mode == "4":
+                loop.run_until_complete(self.run_client(self.process_random_meanings, self.count))
+                if self.count > 0:
+                    print(f"\n{Fore.YELLOW}Completed checking {self.count} random meanings.")
+                else:
+                    print(f"\n{Fore.GREEN}Target of {self.target_available} available usernames reached!")
                 
         except KeyboardInterrupt:
             self.run = False
